@@ -1,14 +1,60 @@
-from flask import Flask, request, jsonify
+import os
+from flask import Flask, request, jsonify, send_file
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 from flask_cors import CORS  # Import CORS
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://127.0.0.1:5500", "supports_credentials": True}})
+CORS(app, resources={r"/*": {
+    "origins": ["http://127.0.0.1:5500", "http://localhost:5500"],
+    "methods": ["GET", "POST", "OPTIONS"],
+    "allow_headers": ["Content-Type", "Authorization"],
+    "supports_credentials": True
+}})
 app.config['JWT_SECRET_KEY'] = 'your-secret-key'  # Change this!
 jwt = JWTManager(app)
 
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'pdf'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/api/upload_document/<course_id>', methods=['POST'])
+def upload_document(course_id):
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        course_folder = os.path.join(app.config['UPLOAD_FOLDER'], course_id)
+        os.makedirs(course_folder, exist_ok=True)
+        file_path = os.path.join(course_folder, filename)
+        file.save(file_path)
+        return jsonify({'message': 'File uploaded successfully', 'filename': filename}), 200
+    return jsonify({'error': 'File type not allowed'}), 400
+
+@app.route('/api/list_documents/<course_id>', methods=['GET'])
+def list_documents(course_id):
+    course_folder = os.path.join(app.config['UPLOAD_FOLDER'], course_id)
+    if not os.path.exists(course_folder):
+        return jsonify({'documents': []}), 200
+    documents = [f for f in os.listdir(course_folder) if allowed_file(f)]
+    return jsonify({'documents': documents}), 200
+
+@app.route('/api/download_document/<course_id>/<filename>', methods=['GET'])
+def download_document(course_id, filename):
+    course_folder = os.path.join(app.config['UPLOAD_FOLDER'], course_id)
+    file_path = os.path.join(course_folder, filename)
+    if os.path.exists(file_path):
+        return send_file(file_path, as_attachment=True)
+    return jsonify({'error': 'File not found'}), 404
 
 def get_db_connection():
     conn = sqlite3.connect('lms.db')
@@ -33,7 +79,7 @@ def login():
 
 
 @app.route('/courses', methods=['GET'])
-@jwt_required()
+# @jwt_required()
 def get_courses():
     conn = get_db_connection()
     courses = conn.execute('SELECT * FROM courses').fetchall()

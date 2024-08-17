@@ -75,6 +75,7 @@ const api = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             },
+            credentials: 'include',
             body: JSON.stringify({ assignment_id: assignmentId, content: submission })
         });
         return await response.json();
@@ -101,4 +102,24 @@ const api = {
         // For now, return a dummy response
         return `Thank you for your question about the course. Here's a response: ${message}`;
     },
+
+    uploadDocument: async (courseId, formData) => {
+        console.log(formData.get('file'))
+        const response = await fetch(`${API_BASE_URL}/api/upload_document/${courseId}`, {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+        });
+        return response.json();
+    },
+
+    listDocuments: async (courseId) => {
+        const response = await fetch(`${API_BASE_URL}/api/list_documents/${courseId}`);
+        const data = await response.json();
+        return data.documents;
+    },
+
+    downloadDocument: async (courseId, filename) => {
+        window.location.href = `${API_BASE_URL}/api/download_document/${courseId}/${filename}`;
+    }
 };

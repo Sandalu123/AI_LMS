@@ -3,13 +3,16 @@ const CourseComponent = {
         app.showLoading();
         let course;
         let assignments;
+        let documents;
         try {
             course = await api.getCourseDetails(courseId);
             assignments = await api.getCourseAssignments(courseId);
+            documents = await api.listDocuments(courseId);
         } catch (error) {
             console.error('Error fetching course details:', error);
             course = { name: 'Unknown Course', instructor_id: 'Unknown' };
             assignments = [];
+            documents = [];
         }
         app.hideLoading();
 
@@ -46,13 +49,34 @@ const CourseComponent = {
                                 </div>
                             </div>
                         </div>
-                        <div class="ui two buttons" style="margin-bottom: 1em;">
-                            <button class="ui primary button" id="aiTutorButton">
+                        <div class="ui vertical buttons" style="width: 100%; margin-bottom: 1em;">
+                            <button class="ui primary button" id="aiTutorButton" style="margin-bottom: 0.5em;">
                                 <i class="robot icon"></i> AI Tutor
+                            </button>
+                            <button class="ui secondary button" id="uploadDocumentsButton" style="margin-bottom: 0.5em;">
+                                <i class="upload icon"></i> Upload Documents
                             </button>
                             <a class="ui button" href="#/dashboard">
                                 <i class="arrow left icon"></i> Back
                             </a>
+                        </div>
+                        <div class="ui segment">
+                            <h4 class="ui header">Uploaded Documents</h4>
+                            <div class="ui relaxed divided list" id="documentsList">
+                                ${documents.map(doc => `
+                                    <div class="item">
+                                        <i class="file pdf outline icon"></i>
+                                        <div class="content">
+                                            <a class="header document-link" href="#" data-filename="${doc}">${doc}</a>
+                                            <div class="description">
+                                                <button class="ui mini primary button download-button" data-filename="${doc}">
+                                                    <i class="download icon"></i> Download
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -83,6 +107,21 @@ const CourseComponent = {
                             </div>
                         </form>
                     </div>
+                </div>
+            </div>
+
+            <!-- Upload Documents Modal -->
+            <div class="ui modal" id="uploadDocumentsModal">
+                <i class="close icon"></i>
+                <div class="header">Upload Documents</div>
+                <div class="content">
+                    <form class="ui form" id="uploadForm" enctype="multipart/form-data">
+                        <div class="field">
+                            <label>Select PDF File</label>
+                            <input type="file" accept=".pdf" id="fileInput">
+                        </div>
+                        <button class="ui primary button" type="submit">Upload</button>
+                    </form>
                 </div>
             </div>
         `;
@@ -138,5 +177,59 @@ const CourseComponent = {
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             }
         });
+
+        $('#uploadDocumentsButton').click(() => {
+            $('#uploadDocumentsModal').modal('show');
+        });
+
+        $('#uploadForm').submit(async (event) => {
+            event.preventDefault();
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (file) {
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const response = await api.uploadDocument(courseId, formData);
+                    console.log('File uploaded successfully:', response);
+                    // Refresh the documents list
+                    const documents = await api.listDocuments(courseId);
+                    updateDocumentsList(documents);
+                    $('#uploadDocumentsModal').modal('hide');
+                } catch (error) {
+                    console.error('Error uploading file:', error);
+                }
+            }
+        });
+
+        $('#documentsList').on('click', '.download-button', async (event) => {
+            event.preventDefault();
+            const filename = $(event.target).data('filename');
+            try {
+                await api.downloadDocument(courseId, filename);
+            } catch (error) {
+                console.error('Error downloading file:', error);
+            }
+        });
+
+        function updateDocumentsList(documents) {
+            const documentsList = $('#documentsList');
+            documentsList.empty();
+            documents.forEach(doc => {
+                documentsList.append(`
+                    <div class="item">
+                        <i class="file pdf outline icon"></i>
+                        <div class="content">
+                            <a class="header document-link" href="#" data-filename="${doc}">${doc}</a>
+                            <div class="description">
+                                <button class="ui mini primary button download-button" data-filename="${doc}">
+                                    <i class="download icon"></i> Download
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `);
+            });
+        }
     }
 };
