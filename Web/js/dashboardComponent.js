@@ -16,11 +16,14 @@ const DashboardComponent = {
                     <h2 class="ui header">
                         <i class="smile outline icon"></i>
                         <div class="content">
-                            Your Mood Today: Positive
-                            <div class="sub header">Keep up the great work!</div>
+                            Your Mood Today: <span id="detectedMood">Analyzing...</span>
+                            <div class="sub header" id="moodConfidence"></div>
                         </div>
                     </h2>
                     <button class="ui right floated button" id="cheerUpButton">Cheer Up!</button>
+                    <div id="webcamPreviewContainer" style="position: absolute; top: 10px; right: 200px; width: 160px; height: 120px; overflow: hidden;">
+                        <video id="webcamPreview" style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);" autoplay muted></video>
+                    </div>
                 </div>
                 <div class="ui stackable grid">
                     <div class="sixteen wide column">
@@ -173,7 +176,11 @@ const DashboardComponent = {
         `;
     },
 
-    afterRender: () => {
+    afterRender: async () => {
+
+        await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+        await faceapi.nets.faceExpressionNet.loadFromUri('/models');
+        
         $('#createCourseLink').click(() => {
             $('#newCourseModal').modal('show');
         });
@@ -217,5 +224,48 @@ const DashboardComponent = {
                 }
             }
         });
+
+        const startWebcam = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const video = document.getElementById('webcamPreview');
+                video.srcObject = stream;
+
+                // Start detecting faces and emotions
+                video.addEventListener('play', () => {
+                    setInterval(async () => {
+                        const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                            .withFaceExpressions();
+                        if (detections) {
+                            processDetections(detections);
+                        }
+                    }, 1000);
+                });
+            } catch (error) {
+                console.error('Error accessing webcam:', error);
+            }
+        };
+
+        const processDetections = (detections) => {
+            const emotions = detections.expressions;
+            const dominantEmotion = Object.keys(emotions).reduce((a, b) => emotions[a] > emotions[b] ? a : b);
+            const confidence = emotions[dominantEmotion];
+
+            updateMoodDisplay(dominantEmotion, confidence);
+
+            // Log all emotions with confidence values
+            console.log('Detected emotions:', emotions);
+        };
+
+        const updateMoodDisplay = (emotion, confidence) => {
+            const moodElement = document.getElementById('detectedMood');
+            const confidenceElement = document.getElementById('moodConfidence');
+
+            moodElement.textContent = emotion;
+            confidenceElement.textContent = `Confidence: ${(confidence * 100).toFixed(2)}%`;
+        };
+
+        // Start the webcam when the component is rendered
+        startWebcam();
     }
 };
