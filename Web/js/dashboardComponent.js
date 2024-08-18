@@ -48,19 +48,25 @@ const DashboardComponent = {
                     </div>
                     <div class="four wide column">
                         <div class="ui segment">
-                            <h3 class="ui header">Quick Links</h3>
-                            <div class="ui vertical fluid menu">
-                                <a class="item" id="createCourseLink">
-                                    <i class="plus icon"></i> Create New Course
-                                </a>
-                                <a class="item" id="viewAssignmentsLink">
-                                    <i class="tasks icon"></i> View All Assignments
-                                </a>
-                                <a class="item" id="logoutLink">
-                                    <i class="sign out icon"></i> Logout
-                                </a>
-                            </div>
-                        </div>
+                        <h3 class="ui header">Quick Links</h3>
+                        <div class="ui vertical fluid menu">
+                            <a class="item" id="createCourseLink">
+                                <i class="plus icon"></i> Create New Course
+                            </a>
+                            <a class="item" id="viewAssignmentsLink">
+                                <i class="tasks icon"></i> View All Assignments
+                            </a>
+                            <a class="item" id="issueCertificateLink">
+                                <i class="certificate icon"></i> Issue Certificate
+                            </a>
+                            <a class="item" id="validateCertificateLink">
+                                <i class="check circle icon"></i> Validate Certificate
+                            </a>
+                            <a class="item" id="logoutLink">
+                                <i class="sign out icon"></i> Logout
+                            </a>
+                      </div>
+                  </div>
                         <div class="ui segment">
                             <h3 class="ui header">News Feed</h3>
                             <div class="ui relaxed divided list">
@@ -146,6 +152,68 @@ const DashboardComponent = {
                 </div>
             </div>
 
+            <div class="ui modal" id="issueCertificateModal">
+              <i class="close icon"></i>
+              <div class="header">Issue Certificate</div>
+              <div class="content">
+                  <form class="ui form" id="issueCertificateForm">
+                      <div class="field">
+                          <label>Issuer Name</label>
+                          <input type="text" name="issuer_name" placeholder="Enter issuer name">
+                      </div>
+                      <div class="field">
+                          <label>Receiver Name</label>
+                          <input type="text" name="receiver_name" placeholder="Enter receiver name">
+                      </div>
+                      <div class="field">
+                          <label>Course Name</label>
+                          <input type="text" name="course_name" placeholder="Enter course name">
+                      </div>
+                      <div class="field">
+                          <label>Department</label>
+                          <input type="text" name="department" placeholder="Enter department">
+                      </div>
+                      <div class="field">
+                          <label>Expiry Date</label>
+                          <input type="date" name="expiry_date">
+                      </div>
+                  </form>
+              </div>
+              <div class="actions">
+                  <div class="ui approve button" id="submitIssueCertificate">Submit</div>
+                  <div class="ui cancel button">Cancel</div>
+              </div>
+          </div>
+
+          <!-- Validate Certificate Modal -->
+          <div class="ui modal" id="validateCertificateModal">
+              <i class="close icon"></i>
+              <div class="header">Validate Certificate</div>
+              <div class="content">
+                  <form class="ui form" id="validateCertificateForm">
+                      <div class="field">
+                          <label>Certificate ID</label>
+                          <input type="text" name="certificate_id" placeholder="Enter certificate ID">
+                      </div>
+                  </form>
+                  <div id="validationResult" style="margin-top: 20px;"></div>
+              </div>
+              <div class="actions">
+                  <div class="ui approve button" id="submitValidateCertificate">Validate</div>
+                  <div class="ui cancel button">Close</div>
+              </div>
+          </div>
+
+          <!-- Certificate Issuance Result Modal -->
+          <div class="ui modal" id="certificateIssuanceResultModal">
+              <i class="close icon"></i>
+              <div class="header">Certificate Issuance Result</div>
+              <div class="content" id="certificateIssuanceResult"></div>
+              <div class="actions">
+                  <div class="ui positive button">OK</div>
+              </div>
+          </div>
+
             <!-- Footer -->
             <div class="ui inverted vertical footer segment">
                 <div class="ui container">
@@ -180,13 +248,111 @@ const DashboardComponent = {
 
         await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
         await faceapi.nets.faceExpressionNet.loadFromUri('/models');
-        
+
         $('#createCourseLink').click(() => {
             $('#newCourseModal').modal('show');
         });
 
         $('#cheerUpButton').click(() => {
             $('#cheerUpModal').modal('show');
+        });
+
+        $('#issueCertificateLink').click(() => {
+            $('#issueCertificateModal').modal('show');
+        });
+  
+        $('#validateCertificateLink').click(() => {
+            $('#validateCertificateModal').modal('show');
+        });
+  
+        $('#submitIssueCertificate').click(async () => {
+            const formData = $('#issueCertificateForm').form('get values');
+            $('#issueCertificateModal').modal('hide');
+            app.showLoading('Issuing Certificate...');
+  
+            try {
+                const response = await fetch('http://127.0.0.1:5000/issue_certificate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData),
+                });
+  
+                const result = await response.json();
+                app.hideLoading();
+  
+                let resultHtml = `
+                    <div class="ui success message">
+                        <div class="header">Certificate Issued Successfully</div>
+                        <p>Certificate ID: ${result.certificate_id}</p>
+                        <p>Transaction Hash: ${result.transaction_hash}</p>
+                    </div>
+                `;
+  
+                $('#certificateIssuanceResult').html(resultHtml);
+                $('#certificateIssuanceResultModal').modal('show');
+            } catch (error) {
+                app.hideLoading();
+                console.error('Error issuing certificate:', error);
+                $('#certificateIssuanceResult').html(`
+                    <div class="ui error message">
+                        <div class="header">Error Issuing Certificate</div>
+                        <p>An error occurred while issuing the certificate. Please try again.</p>
+                    </div>
+                `);
+                $('#certificateIssuanceResultModal').modal('show');
+            }
+        });
+  
+        $('#submitValidateCertificate').click(async () => {
+            const certificateId = $('#validateCertificateForm').form('get value', 'certificate_id');
+            app.showLoading('Validating Certificate...');
+  
+            try {
+                const response = await fetch(`http://127.0.0.1:5000/validate_certificate/${certificateId}`);
+                const result = await response.json();
+                app.hideLoading();
+  
+                let resultHtml = '';
+                if (result.is_valid) {
+                    resultHtml = `
+                        <div class="ui success message">
+                            <div class="header">Certificate is Valid</div>
+                        </div>
+                        <table class="ui celled table">
+                            <tbody>
+                                <tr><td><strong>Certificate ID</strong></td><td>${result.certificate_id}</td></tr>
+                                <tr><td><strong>Issuer Name</strong></td><td>${result.certificate_info.issuer_name}</td></tr>
+                                <tr><td><strong>Receiver Name</strong></td><td>${result.certificate_info.receiver_name}</td></tr>
+                                <tr><td><strong>Course Name</strong></td><td>${result.certificate_info.course_name}</td></tr>
+                                <tr><td><strong>Department</strong></td><td>${result.certificate_info.department}</td></tr>
+                                <tr><td><strong>Issued Date</strong></td><td>${result.certificate_info.issued_date}</td></tr>
+                                <tr><td><strong>Expiry Date</strong></td><td>${result.certificate_info.expiry_date}</td></tr>
+                                <tr><td><strong>Is Active</strong></td><td>${result.certificate_info.is_active ? 'Yes' : 'No'}</td></tr>
+                            </tbody>
+                        </table>
+                    `;
+                } else {
+                    resultHtml = `
+                        <div class="ui error message">
+                            <div class="header">Invalid Certificate</div>
+                            <p>The provided certificate ID is not valid.</p>
+                        </div>
+                    `;
+                }
+  
+                $('#validationResult').html(resultHtml);
+            } catch (error) {
+                app.hideLoading();
+                console.error('Error validating certificate:', error);
+                $('#validationResult').html(`
+                    <div class="ui error message">
+                        <div class="header">Error Validating Certificate</div>
+                        <p>An error occurred while validating the certificate. Please try again.</p>
+                    </div>
+                `);
+            }
         });
 
         $('#viewAssignmentsLink').click(async () => {
